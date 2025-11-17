@@ -1,13 +1,12 @@
 from pydantic import BaseModel, Field 
-from typing import Optional
-from typing import TypedDict, Annotated, Literal
-from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.types import interrupt
-from langchain.chat_models import init_chat_model
-import operator
+from typing import TypedDict, Annotated
 
 
+# Models
+class UserMessage(BaseModel):
+    text: str
+    thread_id: str
+    
 
 # Define the structured output schema
 class DocumentAnalysis(BaseModel):
@@ -32,4 +31,4 @@ class InterviewState(TypedDict):
     interview_plan: dict  # Output from interview_planner_agent
     current_topic_index: int
     questions_asked: int
-    follow_up_count: int  # Track follow-ups on current answer
+    is_follow_up:bool  # Track follow-ups on current answer

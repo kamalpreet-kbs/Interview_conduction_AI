@@ -2,14 +2,12 @@ from langchain.agents import create_agent
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 from static import JOB_DESCRIPTION,RESUME
+from langgraph.graph import StateGraph, START, END
 from schemas import *
 from tools import *
-import os
-
-from dotenv import load_dotenv
-load_dotenv()
-from openai import OpenAI
-client = OpenAI()
+from langgraph.types import Command
+from langgraph.types import interrupt
+from langgraph.checkpoint.memory import MemorySaver
 
 # # Create the agent
 # Static job description and resume
@@ -84,12 +82,7 @@ def create_interview_agent():
 # Usage Example
 if __name__ == "__main__":
     # Your interview plan output
-    interview_plan = {
-        'topics': ['Advanced Python programming', 'Django and Flask web frameworks'],
-        'difficulty_level': 'Advanced',
-        'question_flow': ['Introductory experience questions', 'Deep-dive technical questions'],
-        'recommended_questions': ["Can you describe a complex backend system you've built?"]
-    }
+    interview_plan = plan_result["structured_response"].model_dump()
     
     agent = create_interview_agent()
     
@@ -100,7 +93,7 @@ if __name__ == "__main__":
         "interview_plan": interview_plan,
         "current_topic_index": 0,
         "questions_asked": 0,
-        "follow_up_count": 0
+        "is_follow_up": False
     }
     
     # Run interview loop
@@ -113,14 +106,29 @@ if __name__ == "__main__":
             print(f"\nInterviewer: {result['messages'][-1].content}")
             user_input = input("\nYou: ")
             
-            # Resume with user answer
-            from langgraph.types import Command
-            state = agent.invoke(
-                Command(resume=user_input),
-                config
-            )
+            state = agent.invoke(Command(resume=user_input),config)
+            if state.get("questions_asked",0)>=12:
+                print("\nInterview completed!!")
+                break
+            # # Resume with user answer
+            # from langgraph.types import Command
+            # state = agent.invoke(
+            #     Command(resume=user_input),
+            #     config
+            # )
+            # # Check if interview should end after resuming
+            # current_idx = state.get("current_topic_index", 0)
+            # questions_asked = state.get("questions_asked", 0)
+            # total_topics = len(interview_plan["topics"])
+            
+            # if current_idx >= total_topics or questions_asked >= 13:
+            #     print("Total topics:->",total_topics)
+            #     # print("\nInterview completed!")
+            #     print(f"Final stats - Topics: {current_idx}, Questions: {questions_asked}")
+            #     break
+            
         else:
-            # Interview ended
+            # Interview ended naturally
             print("\nInterview completed!")
             break
 
