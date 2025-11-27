@@ -76,11 +76,11 @@ def wait_for_answer(state: InterviewState) -> dict:
     user_answer = interrupt("Please provide your answer:")
     is_follow_up = state.get("is_follow_up",False)
     
-    new_count = state.get("questions_asked", 0) if is_follow_up else state.get("questions_asked", 0) + 1
+    new_count = state.get("questions_asked", 0) 
      
     return {
         "messages": [HumanMessage(content=user_answer)],
-        "questions_asked": new_count
+        "questions_asked": new_count + 1
     }
 
 # Node 3: Decide Next Action
@@ -90,7 +90,6 @@ def decide_next_action(state: InterviewState) -> dict:
     plan = state["interview_plan"]
     current_idx = state.get("current_topic_index", 0)
     is_follow_up = state.get("is_follow_up", 0)
-    question_asked = state.get("question_asked",0)
     
     # Skip decision for intro (Q1) and HR (Q12)
     questions_asked = state.get("questions_asked", 0)
