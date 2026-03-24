@@ -2,11 +2,22 @@ from langchain.tools import tool
 from schemas import InterviewState
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
-from typing import Literal
+from typing import Literal, Optional
 from langchain.chat_models import init_chat_model
-
+from pathlib import Path
+import logging
+from langchain_community.document_loaders import PyPDFLoader
 from dotenv import load_dotenv
 load_dotenv()
+import logging
+try:
+    from PIL import Image
+    import pytesseract
+    from pdf2image import convert_from_path
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+logger = logging.getLogger(__name__)
 
 model = init_chat_model("gpt-4o")
 
@@ -149,6 +160,61 @@ def should_continue(state: InterviewState) -> Literal["generate_question", "end"
         return "end"
     else:
         return "generate_question"
+
+def pdf_to_text(pdf_path: str) -> str:
+    """
+    Extracts text from a PDF file. 
+    First attempts standard extraction using PyPDFLoader.
+    If that yields empty or very little text, attempts OCR using pytesseract.
+    
+    Args:
+        pdf_path (str): Path to the PDF file.
+        
+    Returns:
+        str: Extracted text from the PDF.
+    """
+    path = Path(pdf_path)
+    if not path.exists() or not path.is_file():
+        logger.error(f"pdf_to_text: File not found at {pdf_path}")
+        return ""
+
+    text = ""
+    
+    # 1. Try standard text extraction first (fast)
+    try:
+        logger.info(f"Attempting standard text extraction for {pdf_path}")
+        loader = PyPDFLoader(str(path))
+        docs = loader.load()
+        text = "\n\n".join(d.page_content for d in docs if d.page_content)
+    except Exception as e:
+        logger.warning(f"Standard extraction failed: {e}")
+
+    # 2. Check if we need OCR
+    # If text is empty or very short (likely scanned image), try OCR
+    if not text or len(text.strip()) < 50:
+        if OCR_AVAILABLE:
+            logger.info("Text content low/empty. Attempting OCR...")
+            try:
+                # Convert PDF pages to images
+                # poppler_path must be in PATH or specified
+                images = convert_from_path(str(path))
+                
+                ocr_text_list = []
+                for i, image in enumerate(images):
+                    page_text = pytesseract.image_to_string(image)
+                    ocr_text_list.append(f"--- Page {i+1} ---\n{page_text}")
+                
+                text = "\n\n".join(ocr_text_list)
+                logger.info("OCR successfully extracted text.")
+                
+            except Exception as e:
+                logger.error(f"OCR Failed: {e}. Ensure poppler and tesseract are installed.")
+                if not text: # If we had no text and OCR failed, return error message or empty
+                    return ""
+        else:
+            logger.warning("OCR libraries (pdf2image, pytesseract, Pillow) not installed. Skipping OCR.")
+            
+    return text
 
 # def should_continue(state: InterviewState) -> Literal["generate_question", "end"]:
 #     """Check if we should continue or end interview"""
