@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field 
+from pydantic import BaseModel, Field
 from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages
 
 
 # Models
@@ -27,7 +28,7 @@ class InterviewPlan(BaseModel):
     recommended_questions: list[str] = Field(description="Specific interview questions")
     
 class InterviewState(TypedDict):
-    messages: Annotated[list, "conversation history"]
+    messages: Annotated[list, add_messages]
     interview_plan: dict  # Output from interview_planner_agent
     current_topic_index: int
     questions_asked: int

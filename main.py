@@ -200,7 +200,7 @@ app.add_middleware(
 # -------------------------
 # AI + TTS Clients  
 # -------------------------
-eleven = ElevenLabs(api_key="sk_e01de8d3124d5dd55daedcccf8f475da2214bf9ece0410bc")
+eleven = ElevenLabs(api_key="sk_cd9ef4033476688822593120ccfe36f6223a1c8da363c733")
 # -------------------------
 # Global State
 # -------------------------
@@ -236,9 +236,10 @@ async def init_interview(
         shutil.copyfileobj(job_description.file, buffer)
         
     # Generate Plan
-    try:
-        plan_model = generate_interview_plan(job_path, resume_path)
-        interview_plan = plan_model.model_dump()
+    try: 
+        data = generate_interview_plan(job_path, resume_path)
+        analysis = data["analysis"]
+        interview_plan = data["plan"].model_dump()
         
         # Store plan in session
         SESSIONS[thread_id] = interview_plan
@@ -252,7 +253,11 @@ async def init_interview(
             "is_follow_up": False
         }
         
-        return {"thread_id": thread_id, "message": "Interview initialized successfully."}
+        return {
+            "thread_id": thread_id, 
+            "message": "Interview initialized successfully.",
+            "analysis": analysis.model_dump()
+        }
         
     except Exception as e:
         import traceback
@@ -309,10 +314,67 @@ def ask(user_msg: UserMessage):
     except Exception as e:
         print(f"TTS Error: {e}")
         audio_base64 = ""
+    # 6. Serialize full history
+    history = []
+    for m in result.get("messages", []):
+        # LangChain messages have a 'type' attribute (e.g., 'ai', 'human')
+        role = "interviewer" if getattr(m, "type", "") == "ai" else "candidate"
+        history.append({
+            "role": role,
+            "content": m.content
+        })
+
+    is_complete = result.get("questions_asked", 0) >= 12 and getattr(result.get("messages", [])[-1], "type", "") == "ai"
+    
+    evaluation = None
+    if is_complete:
+        print("Generating interview evaluation...")
+        try:
+            from tools import model
+            from langchain_core.messages import SystemMessage, HumanMessage
+            
+            history_text = "\n".join([f"{h['role']}: {h['content']}" for h in history])
+            eval_prompt = f"""You are an expert interview evaluator. 
+            Analyze the following interview conversation and provide a structured feedback report.
+            
+            Conversation:
+            {history_text}
+            
+            Provide the feedback in the following JSON format:
+            {{
+                "score": 0-100 (overall performance),
+                "summary": "Brief executive summary",
+                "strengths": ["list", "of", "strengths"],
+                "weaknesses": ["list", "of", "areas", "for", "improvement"],
+                "detailed_feedback": "Detailed paragraph of feedback"
+            }}
+            Return ONLY the raw JSON.
+            """
+            eval_response = model.invoke([
+                SystemMessage(content="Return pure JSON evaluation of the interview."),
+                HumanMessage(content=eval_prompt)
+            ])
+            import json
+            # Clean possible markdown wrap
+            raw_eval = eval_response.content.replace("```json", "").replace("```", "").strip()
+            evaluation = json.loads(raw_eval)
+        except Exception as e:
+            print(f"Evaluation Error: {e}")
+            evaluation = {
+                "score": 0,
+                "summary": "Feedback generation failed.",
+                "strengths": [],
+                "weaknesses": [],
+                "detailed_feedback": "Could not generate feedback at this time."
+            }
+
     return JSONResponse({
         "user_text": user_text,
         "ai_text": ai_text,
-        "audio_base64": audio_base64
+        "audio_base64": audio_base64,
+        "history": history,
+        "interview_complete": is_complete,
+        "evaluation": evaluation
     })
 if __name__ == "__main__":
     import uvicorn

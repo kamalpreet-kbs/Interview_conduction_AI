@@ -71,12 +71,20 @@ def generate_question(state: InterviewState) -> dict:
         Ask a final HR-style question (e.g., salary expectations, availability, questions for us).
         Be professional and friendly."""
     
-    recent_context = messages[-4:] if len(messages) > 4 else messages
+    # Print cumulative history
+    for msg in messages:
+        role = "Interviewer" if getattr(msg, "type", "") == "ai" else "Candidate"
+        print(f"[{role}]: {msg.content}")
+    
+    recent_context = messages
     response = model.invoke([
         SystemMessage(content=system_prompt),
         *recent_context,
         HumanMessage(content="Generate the next interview question.")
     ])
+    
+    # Print the new question as well
+    print(f"[Interviewer]: {response.content}")
     
     return {"messages": [AIMessage(content=response.content)]}
 
@@ -160,6 +168,30 @@ def should_continue(state: InterviewState) -> Literal["generate_question", "end"
         return "end"
     else:
         return "generate_question"
+
+def wrap_up(state: InterviewState) -> dict:
+    """Generate a final thank you message and end the interview."""
+    messages = state.get("messages", [])
+    
+    # Print cumulative history one last time to show the final answer
+    print("\n" + "="*50)
+    print("CUMULATIVE CONVERSATION HISTORY (FINAL)")
+    print("="*50)
+    for msg in messages:
+        role = "Interviewer" if getattr(msg, "type", "") == "ai" else "Candidate"
+        print(f"[{role}]: {msg.content}")
+
+    response = model.invoke([
+        SystemMessage(content="The interview is over. Provide a brief, professional thank you and closing statement to the candidate. Acknowledge that the interview has concluded."),
+        *messages,
+        HumanMessage(content="Wrap up the interview.")
+    ])
+    
+    # Print the final wrap-up message
+    print(f"[Interviewer]: {response.content}")
+    print("="*50 + "\n")
+    
+    return {"messages": [AIMessage(content=response.content)]}
 
 def pdf_to_text(pdf_path: str) -> str:
     """

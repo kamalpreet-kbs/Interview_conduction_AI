@@ -234,7 +234,10 @@ def generate_interview_plan(job_pdf_path: str, resume_pdf_path: str):
         }]
     })
     
-    return plan_result["structured_response"]
+    return {
+        "analysis": analysis_data,
+        "plan": plan_result["structured_response"]
+    }
 def create_interview_agent():
     workflow = StateGraph(InterviewState)
     
@@ -242,6 +245,7 @@ def create_interview_agent():
     workflow.add_node("generate_question", generate_question)
     workflow.add_node("wait_for_answer", wait_for_answer)
     workflow.add_node("decide_next_action", decide_next_action)
+    workflow.add_node("wrap_up", wrap_up)
     
     # Add edges
     workflow.add_edge(START, "generate_question")
@@ -252,9 +256,10 @@ def create_interview_agent():
         should_continue,
         {
             "generate_question": "generate_question",
-            "end": END
+            "end": "wrap_up"
         }
     )
+    workflow.add_edge("wrap_up", END)
     
     # Compile with checkpointer (required for interrupts)
     checkpointer = MemorySaver()
