@@ -189,6 +189,10 @@ import base64
 import os
 import shutil
 import uuid
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 # -------------------------
 # FastAPI Setup
 # -------------------------
@@ -200,7 +204,12 @@ app.add_middleware(
 # -------------------------
 # AI + TTS Clients  
 # -------------------------
-eleven = ElevenLabs(api_key="sk_cd9ef4033476688822593120ccfe36f6223a1c8da363c733")
+eleven_key = os.getenv("Eleven_Labs_key")
+if not eleven_key:
+    # Fallback to hardcoded for now just in case, but prefer env
+    eleven_key = "sk_cd9ef4033476688822593120ccfe36f6223a1c8da363c733"
+    
+eleven = ElevenLabs(api_key=eleven_key)
 # -------------------------
 # Global State
 # -------------------------
